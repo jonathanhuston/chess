@@ -1,1 +1,663 @@
-global white, black, emptyglobal a, b, c, d, e, f, g, hglobal king, queen, rook, knight, bishop, pawnglobal human, computerrecord position (file, rank)record squarecontent (squarecolor, squarepiece)record flagrecord (cancastle, enpassant, draw, promotion, origin, dest, counter)link brainlessprocedure initializeconstants ();	white := 1;	black := 2;	empty := 0;	a := 1;	b := 2;	c := 3;	d := 4;	e := 5;	f := 6;	g := 7;	h := 8;	king := 1;	queen := 2;	rook := 3;	knight := 4;	bishop := 5;	pawn := 6;	human := 1;	computer := 2;endprocedure initializepieces (pieces);	local x;	every !pieces := [set (), set ()];	insert (pieces [king] [white], position (e, 1));	insert (pieces [king] [black], position (e, 8));	insert (pieces [queen] [white], position (d, 1));	insert (pieces [queen] [black], position (d, 8));	insert (pieces [rook] [white], position (a, 1));	insert (pieces [rook] [black], position (a, 8));	insert (pieces [rook] [white], position (h, 1));	insert (pieces [rook] [black], position (h, 8));	insert (pieces [knight] [white], position (b, 1));	insert (pieces [knight] [black], position (b, 8));	insert (pieces [knight] [white], position (g, 1));	insert (pieces [knight] [black], position (g, 8));	insert (pieces [bishop] [white], position (c, 1));	insert (pieces [bishop] [black], position (c, 8));	insert (pieces [bishop] [white], position (f, 1));	insert (pieces [bishop] [black], position (f, 8));		every x := a to h do {		insert (pieces [pawn] [white], position (x, 2));		insert (pieces [pawn] [black], position (x, 7));	};endprocedure initializeboard (board, pieces);	local piece, color, square;	every !board := list (8, squarecontent (0, 0));		every color := white to black &		every piece := king to pawn &			every square := !pieces [piece] [color] &				board [square.file] [square.rank] := squarecontent (color, piece);endprocedure initializeflags (flags);	flags.cancastle := list (2, a+h);	flags.enpassant := position (empty, empty);	flags.draw := 0;	flags.promotion := "Q";	flags.origin := position (empty, empty);	flags.dest := position (empty, empty);	flags.counter := 1;endprocedure displaysquare (square);	writes (char (ord ("a") + square.file - 1), square.rank);endprocedure displaypiece (color, piece);	if color = white then		case piece of {			king : writes ("K");			queen : writes ("Q");			rook : writes ("R");			knight : writes ("N");			bishop : writes ("B");			pawn : writes ("P")		} 	else if color = black then		case piece of {			king : writes ("k");			queen : writes ("q");			rook : writes ("r");			knight : writes ("n");			bishop : writes ("b");			pawn : writes ("p")		}	else		writes (".");endprocedure displaymove (origin, dest);	displaysquare (origin);	displaysquare (dest);endprocedure displayboard (board);	write ();	every y := 8 to 1 by -1 do {		writes (y, " ");		every x := 1 to 8 do			displaypiece ((board [x][y]).squarecolor, (board [x][y]).squarepiece);		write ();	};	write ();	writes ("  ");	every x := 1 to 8 do		writes (char (ord ("a") + x - 1));	write ();	write ();endprocedure othercolor (color);	return 3 - color;endprocedure otherplayer (currentplayer);	return 3 - currentplayer;endprocedure samesquare (s1, s2);	return (s1.file = s2.file & s1.rank = s2.rank);endprocedure copysquare (s1, s2);	s2.file := s1.file;	s2.rank := s1.rank;endprocedure removesquare (positions, square);	local tempsquare;	every tempsquare := !positions do		if tempsquare.file = square.file & tempsquare.rank = square.rank then			delete (positions, tempsquare);endprocedure issquare (positions, square);	local tempsquare;	every tempsquare := !positions do		if tempsquare.file = square.file & tempsquare.rank = square.rank then			return;	fail;endprocedure copyboard (board, pieces, flags, boardcopy, piecescopy, flagscopy);	local x, y, piece, color, square;	every x := a to h &		every y := 1 to 8 do			boardcopy [x] [y] := copy (board [x] [y]);	every color := white to black &		every piece := king to pawn do			piecescopy [piece] [color] := copy (pieces [piece] [color]);	flagscopy.cancastle := copy (flags.cancastle);	flagscopy.enpassant := copy (flags.enpassant);	flagscopy.draw := flags.draw;	flagscopy.promotion := flags.promotion;endprocedure movepiece (board, pieces, flags, color, origin, dest);	local piece, newpiece, positions;	piece := (board [origin.file] [origin.rank]).squarepiece;	if piece = pawn & dest.rank = (1 | 8) then		case flags.promotion of {			"Q": newpiece := queen;			"R" : newpiece := rook;			"N" : newpiece := knight;			"B" : newpiece := bishop		}	else 		newpiece := piece;	removesquare (pieces [piece] [color], origin);	insert (pieces [newpiece] [color], dest);	if (board [dest.file] [dest.rank]).squarecolor = othercolor (color) then {		piece := (board [dest.file] [dest.rank]).squarepiece;		removesquare (pieces [piece, othercolor (color)], dest);		flags.draw := 0;	};	board [origin.file] [origin.rank] := squarecontent (empty, empty);	board [dest.file] [dest.rank] := squarecontent (color, newpiece);	if piece = king & abs (dest.file - origin.file) = 2 then		if dest.file = g then {			removesquare (pieces [rook] [color], position (h, color^3));			insert (pieces [rook] [color], position (f, color^3));			board [h] [color^3] := squarecontent (empty, empty);			board [f] [color^3] := squarecontent (color, rook);		} else {			removesquare (pieces [rook] [color], position (a, color^3));			insert (pieces [rook] [color], position (d, color^3));			board [a] [color^3] := squarecontent (empty, empty);			board [d] [color^3] := squarecontent (color, rook);		};	if flags.cancastle [color] > 0 then {		if piece = king then 			flags.cancastle [color] := 0		else if piece = rook then			if flags.cancastle [color] = (a | a+h) &  				samesquare (origin, position (a, color^3)) then					flags.cancastle [color] := flags.cancastle [color] - a			else if flags.cancastle [color] = (h | a+h) & 				samesquare (origin, position (h, color^3)) then					flags.cancastle [color] := flags.cancastle [color] - h;	};	if piece = pawn & samesquare (dest, flags.enpassant) then {		removesquare (pieces [pawn] [othercolor (color)], 			position (dest.file, othercolor (color)+3));		board [dest.file] [othercolor (color)+3] := squarecontent (empty, empty);	};	if piece = pawn & abs (dest.rank - origin.rank) = 2 then		flags.enpassant := position (dest.file, color*3)	else		flags.enpassant := position (empty, empty); 	if piece = pawn then flags.draw := 0 else flags.draw +:= 1;endprocedure ischeck (board, pieces, flags, color, check);	local moves, kingpos;	if \check then {		kingpos := ? pieces [king] [color];		moves := set ();		generateall (board, pieces, flags, othercolor (color), moves, &null);		return (issquare (moves, kingpos));	} else fail;endprocedure testmove (board, pieces, flags, color, origin, x, y, moves, check);	local boardcopy, piecescopy, flagscopy;	if (board [x] [y]).squarecolor = color then fail;	boardcopy := list (8);	every !boardcopy := list (8, squarecontent (0, 0));	piecescopy := list (6);	every !piecescopy := [set (), set ()];	flagscopy := flagrecord ();	copyboard (board, pieces, flags, boardcopy, piecescopy, flagscopy);	movepiece (boardcopy, piecescopy, flagscopy, color, origin, position (x, y));	if not (ischeck (boardcopy, piecescopy, flagscopy, color, check)) then 		insert (moves, position (x, y));	if (board [x] [y]).squarecolor = othercolor (color) then fail;	return;endprocedure generateking (board, pieces, flags, color, origin, moves, check);	local x, y, cancastle;	every x := origin.file - 1 to origin.file + 1 & (a <= x <= h) &		every y := origin.rank - 1 to origin.rank + 1 & (1 <= y <= 8) do			testmove (board, pieces, flags, color, origin, x, y, moves, check);	cancastle := flags.cancastle [color];	if cancastle > 0 & not (ischeck (board, pieces, flags, color, check)) then {		if cancastle = (h | a+h) &			(board [f] [color^3]).squarecolor = empty &			(board [g] [color^3]).squarecolor = empty &			(board [h] [color^3]).squarecolor = color &			(board [h] [color^3]).squarepiece = rook then {				movepiece (board, pieces, flags, color, origin, position (f, color^3));				if not (ischeck (board, pieces, flags, color, check)) then					testmove (board, pieces, flags, color, position (f, color^3), g, color^3, moves, check);				movepiece (board, pieces, flags, color, position (f, color^3), origin);		} else if cancastle = (a | a+h) &			(board [d] [color^3]).squarecolor = empty &			(board [c] [color^3]).squarecolor = empty &			(board [b] [color^3]).squarecolor = empty &			(board [a] [color^3]).squarecolor = color &			(board [a] [color^3]).squarepiece = rook then {				movepiece (board, pieces, flags, color, origin, position (d, color^3));				if not (ischeck (board, pieces, flags, color, check)) then					testmove (board, pieces, flags, color, position (d, color^3), c, color^3, moves, check);				movepiece (board, pieces, flags, color, position (d, color^3), origin);		};	};			flags.cancastle [color] := cancastle;endprocedure generaterook (board, pieces, flags, color, origin, moves, check);	local x, y;	every x := origin.file + 1 to h do		if not (testmove (board, pieces, flags, color, origin, x, origin.rank, moves, check)) then break;	every x := origin.file - 1 to a by -1 do		if not (testmove (board, pieces, flags, color, origin, x, origin.rank, moves, check)) then break;	every y := origin.rank + 1 to 8 do		if not (testmove (board, pieces, flags, color, origin, origin.file, y, moves, check)) then break;	every y := origin.rank - 1 to 1 by -1 do		if not (testmove (board, pieces, flags, color, origin, origin.file, y, moves, check)) then break;endprocedure generatebishop (board, pieces, flags, color, origin, moves, check);	local d;	every d := 1 to 7 & origin.file + d <= h & origin.rank + d <= 8 do 		if not (testmove (board, pieces, flags, color, origin, origin.file + d, origin.rank + d, moves, check)) then break;	every d := 1 to 7 & origin.file + d <= h & origin.rank - d >= 1 do 		if not (testmove (board, pieces, flags, color, origin, origin.file + d, origin.rank - d, moves, check)) then break;	every d := 1 to 7 & origin.file - d >= a & origin.rank + d <= 8 do 		if not (testmove (board, pieces, flags, color, origin, origin.file - d, origin.rank + d, moves, check)) then break;	every d := 1 to 7 & origin.file - d >= a & origin.rank - d >= 1 do 		if not (testmove (board, pieces, flags, color, origin, origin.file - d, origin.rank - d, moves, check)) then break;endprocedure generatequeen (board, pieces, flags, color, origin, moves, check);	generaterook (board, pieces, flags, color, origin, moves, check);	generatebishop (board, pieces, flags, color, origin, moves, check);endprocedure generateknight (board, pieces, flags, color, origin, moves, check);	local dx, dy;	every dx := (-2 | -1 | 1 | 2) & every dy := (-2 | -1 | 1 | 2) &		abs (dx) + abs (dy) = 3 & 			a <= origin.file + dx <= h & 1 <= origin.rank + dy <= 8 do				testmove (board, pieces, flags, color, origin, origin.file+dx, origin.rank+dy, moves, check);endprocedure generatepawn (board, pieces, flags, color, origin, moves, check);	if color = white then {		if (board [origin.file] [origin.rank + 1]).squarecolor = empty & \check then {			testmove (board, pieces, flags, white, origin, origin.file, origin.rank + 1, moves, check);			if origin.rank = 2 & (board [origin.file] [4]).squarecolor = empty then				testmove (board, pieces, flags, white, origin, origin.file, 4, moves, check);		};		if origin.file >= b & 			((board [origin.file - 1] [origin.rank + 1]).squarecolor = black |			samesquare (flags.enpassant, position (origin.file - 1, origin.rank + 1))) then				testmove (board, pieces, flags, white, origin, origin.file - 1, origin.rank + 1, moves, check);		if origin.file <= h &			((board [origin.file + 1] [origin.rank + 1]).squarecolor = black |			samesquare (flags.enpassant, position (origin.file + 1, origin.rank + 1))) then				testmove (board, pieces, flags, white, origin, origin.file + 1, origin.rank + 1, moves, check);	} else {		if (board [origin.file] [origin.rank - 1]).squarecolor = empty & \check then {			testmove (board, pieces, flags, black, origin, origin.file, origin.rank - 1, moves, check);			if origin.rank = 7 & (board [origin.file] [5]).squarecolor = empty then 				testmove (board, pieces, flags, black, origin, origin.file, 5, moves, check);		};		if origin.file >= b & 			((board [origin.file - 1] [origin.rank - 1]).squarecolor = white |			samesquare (flags.enpassant, position (origin.file - 1, origin.rank - 1))) then				testmove (board, pieces, flags, black, origin, origin.file - 1, origin.rank - 1, moves, check);		if origin.file <= h &			((board [origin.file + 1] [origin.rank - 1]).squarecolor = white |			samesquare (flags.enpassant, position (origin.file + 1, origin.rank - 1))) then				testmove (board, pieces, flags, black, origin, origin.file + 1, origin.rank - 1, moves, check);	};endprocedure generatemoves (board, pieces, flags, color, origin, moves, check);	case (board [origin.file] [origin.rank]).squarepiece of {		king : generateking (board, pieces, flags, color, origin, moves, check);		queen : generatequeen (board, pieces, flags, color, origin, moves, check);		rook : generaterook (board, pieces, flags, color, origin, moves, check);		knight : generateknight (board, pieces, flags, color, origin, moves, check);		bishop : generatebishop (board, pieces, flags, color, origin, moves, check);		pawn : generatepawn (board, pieces, flags, color, origin, moves, check)	};endprocedure generateall (board, pieces, flags, color, moves, check);	local piece, square, piecemoves, squarelist;		every piece := king to pawn do {		squarelist := sort (pieces [piece][color]);		every square := !squarelist do {			piecemoves := set ();			generatemoves (board, pieces, flags, color, square, piecemoves, check);			every insert (moves, copy (!piecemoves));		};	};endprocedure nomoves (board, pieces, flags, color);	local moves;		moves := set ();	generateall (board, pieces, flags, color, moves, king);	return (*moves = 0);endprocedure ismate (board, pieces, flags, color);	return (ischeck (board, pieces, flags, color, king) & nomoves (board, pieces, flags, color));endprocedure isdraw (flags);	return (flags.draw >= 100);end	procedure islegalmove (board, pieces, flags, color, origin, dest);	local move, moves;	if (board [origin.file] [origin.rank]).squarecolor ~= color | 	(board [dest.file] [dest.rank]).squarecolor = color then		fail	else {		moves := set ();		generatemoves (board, pieces, flags, color, origin, moves, king);		every move := !moves do			if samesquare (move, dest) then return;		fail;			};endprocedure isvalidentry (board, inputmove);	if not (4 <= *inputmove <= 5) then fail;	if not (ord ("a") <= ord (inputmove [1]) <= ord ("h")) then fail;	if not (ord ("1") <= ord (inputmove [2]) <= ord ("8")) then fail;	if not (ord ("a") <= ord (inputmove [3]) <= ord ("h")) then fail;	if not (ord ("1") <= ord (inputmove [4]) <= ord ("8")) then fail;	if *inputmove = 5 then {		if not (inputmove [5] == "Q" | "R" | "N" | "B") then fail;		if inputmove [4] ~== "8" then fail;	};	return;endprocedure gethumanmove (board, pieces, flags, color);	local inputmove, origin, dest;	repeat {		writes (flags.counter, ". ");		if color = black then {			displaymove (flags.origin, flags.dest);			writes (" ");		};		inputmove := read ();		if inputmove == "draw" then break;		if not (isvalidentry (board, inputmove)) then {			write ("Invalid entry.");			next;		};		origin := position (ord (inputmove [1]) - ord ("a") + 1, 					numeric (inputmove [2]));		dest := position (ord (inputmove [3]) - ord ("a") + 1,					numeric (inputmove [4]));		if islegalmove (board, pieces, flags, color, origin, dest) then break;		write ("Illegal move.");	};	if *inputmove = 5 then flags.promotion := inputmove [5];	if inputmove == "draw" then 		flags.draw := 100	else {		movepiece (board, pieces, flags, color, origin, dest);		copysquare (origin, flags.origin);		copysquare (dest, flags.dest);	};endprocedure traincomputer (games);local pieces, board, flags;local gamecounter, color;	gamecounter := 1;	until gamecounter > games do {		write ("Game: ", gamecounter);		write ();		pieces := list (6);		initializepieces (pieces);		board := list (8);		initializeboard (board, pieces);		flags := flagrecord ();		initializeflags (flags);		color := white;		until nomoves (board, pieces, flags, color) | isdraw (flags) do {			if color = white then {				writes (flags.counter, ". ");			} else				writes (" ");			getcomputermove (board, pieces, flags, color);			displaymove (flags.origin, flags.dest);			if color = black then {				flags.counter +:= 1;				write ();				displayboard (board);			};			color := othercolor (color);			flags.promotion := "Q";		};		if color = black then {			write ();			displayboard (board);		};		gamecounter +:= 1;	};endprocedure playgame (firstplayer);local pieces, board, flags;local playercolor, player;	pieces := list (6);	initializepieces (pieces);		board := list (8);	initializeboard (board, pieces);	flags := flagrecord ();	initializeflags (flags);	playercolor := list (2);	playercolor [firstplayer] := white;	playercolor [otherplayer (firstplayer)] := black;	player := firstplayer;	until nomoves (board, pieces, flags, playercolor [player]) | isdraw (flags) do {		displayboard (board);		if player = human then			gethumanmove (board, pieces, flags, playercolor [human])		else {			writes (flags.counter, ". ");			if playercolor [computer] = black then {				displaymove (flags.origin, flags.dest);				writes (" ");			};			getcomputermove (board, pieces, flags, playercolor [computer]);			displaymove (flags.origin, flags.dest);			write ();		};		if playercolor [player] = black then flags.counter +:= 1;		player := otherplayer (player);		flags.promotion := "Q";	};	displayboard (board);	if ismate (board, pieces, flags, playercolor [player]) then		case player of {			human : write ("You are checkmate.");	computer : write ("I am checkmate.")		}	else if isdraw (flags) then		write ("Draw.")	else		write ("Stalemate.");	write ();endprocedure main (args);	initializeconstants ();	if *args = 0 then		playgame (human)	else if args [1] == "-b" then		playgame (computer)	else if args [1] == "-c" & \args [2] then		traincomputer (numeric (args [2]))	else 		write ("Invalid arguments.");end
+global white, black, empty
+
+global a, b, c, d, e, f, g, h
+
+global king, queen, rook, knight, bishop, pawn
+
+global human, computer
+
+record position (file, rank)
+
+record squarecontent (squarecolor, squarepiece)
+
+record flagrecord (cancastle, enpassant, draw, promotion, origin, dest, counter)
+
+link brainless
+
+
+procedure initializeconstants ();
+	white := 1;
+	black := 2;
+	empty := 0;
+
+	a := 1;
+	b := 2;
+	c := 3;
+	d := 4;
+	e := 5;
+	f := 6;
+	g := 7;
+	h := 8;
+
+	king := 1;
+	queen := 2;
+	rook := 3;
+	knight := 4;
+	bishop := 5;
+	pawn := 6;
+
+	human := 1;
+	computer := 2;
+end
+
+
+procedure initializepieces (pieces);
+	local x;
+
+	every !pieces := [set (), set ()];
+
+	insert (pieces [king] [white], position (e, 1));
+	insert (pieces [king] [black], position (e, 8));
+
+	insert (pieces [queen] [white], position (d, 1));
+	insert (pieces [queen] [black], position (d, 8));
+
+	insert (pieces [rook] [white], position (a, 1));
+	insert (pieces [rook] [black], position (a, 8));
+	insert (pieces [rook] [white], position (h, 1));
+	insert (pieces [rook] [black], position (h, 8));
+
+	insert (pieces [knight] [white], position (b, 1));
+	insert (pieces [knight] [black], position (b, 8));
+	insert (pieces [knight] [white], position (g, 1));
+	insert (pieces [knight] [black], position (g, 8));
+
+	insert (pieces [bishop] [white], position (c, 1));
+	insert (pieces [bishop] [black], position (c, 8));
+	insert (pieces [bishop] [white], position (f, 1));
+	insert (pieces [bishop] [black], position (f, 8));
+	
+	every x := a to h do {
+		insert (pieces [pawn] [white], position (x, 2));
+		insert (pieces [pawn] [black], position (x, 7));
+	};
+end
+
+
+procedure initializeboard (board, pieces);
+	local piece, color, square;
+
+	every !board := list (8, squarecontent (0, 0));	
+	every color := white to black &
+		every piece := king to pawn &
+			every square := !pieces [piece] [color] &
+				board [square.file] [square.rank] := squarecontent (color, piece);
+end
+
+
+procedure initializeflags (flags);
+	flags.cancastle := list (2, a+h);
+	flags.enpassant := position (empty, empty);
+	flags.draw := 0;
+	flags.promotion := "Q";
+	flags.origin := position (empty, empty);
+	flags.dest := position (empty, empty);
+	flags.counter := 1;
+end
+
+
+
+procedure displaysquare (square);
+	writes (char (ord ("a") + square.file - 1), square.rank);
+end
+
+
+procedure displaypiece (color, piece);
+	if color = white then		case piece of {
+			king : writes ("K");
+			queen : writes ("Q");
+			rook : writes ("R");
+			knight : writes ("N");
+			bishop : writes ("B");
+			pawn : writes ("P")
+		} 
+	else if color = black then
+		case piece of {
+			king : writes ("k");
+			queen : writes ("q");
+			rook : writes ("r");
+			knight : writes ("n");
+			bishop : writes ("b");
+			pawn : writes ("p")
+		}
+	else
+		writes (".");
+end
+
+
+procedure displaymove (origin, dest);
+	displaysquare (origin);
+	displaysquare (dest);
+end
+
+
+procedure displayboard (board);
+	write ();
+
+	every y := 8 to 1 by -1 do {
+		writes (y, " ");
+		every x := 1 to 8 do
+			displaypiece ((board [x][y]).squarecolor, (board [x][y]).squarepiece);
+		write ();
+	};
+	write ();
+	writes ("  ");
+	every x := 1 to 8 do
+		writes (char (ord ("a") + x - 1));
+	write ();
+	write ();
+end
+
+
+procedure othercolor (color);
+	return 3 - color;
+end
+
+
+procedure otherplayer (currentplayer);
+	return 3 - currentplayer;
+end
+
+
+procedure samesquare (s1, s2);
+	return (s1.file = s2.file & s1.rank = s2.rank);
+end
+
+
+procedure copysquare (s1, s2);
+	s2.file := s1.file;
+	s2.rank := s1.rank;
+end
+
+
+procedure removesquare (positions, square);
+	local tempsquare;
+
+	every tempsquare := !positions do
+		if tempsquare.file = square.file & tempsquare.rank = square.rank then
+			delete (positions, tempsquare);
+end
+
+
+procedure issquare (positions, square);
+	local tempsquare;
+
+	every tempsquare := !positions do
+		if tempsquare.file = square.file & tempsquare.rank = square.rank then
+			return;
+	fail;
+end
+
+
+procedure copyboard (board, pieces, flags, boardcopy, piecescopy, flagscopy);
+	local x, y, piece, color, square;
+
+	every x := a to h &
+		every y := 1 to 8 do
+			boardcopy [x] [y] := copy (board [x] [y]);
+
+	every color := white to black &
+		every piece := king to pawn do
+			piecescopy [piece] [color] := copy (pieces [piece] [color]);
+
+	flagscopy.cancastle := copy (flags.cancastle);
+	flagscopy.enpassant := copy (flags.enpassant);
+	flagscopy.draw := flags.draw;
+	flagscopy.promotion := flags.promotion;
+end
+
+
+procedure movepiece (board, pieces, flags, color, origin, dest);
+	local piece, newpiece, positions;
+
+	piece := (board [origin.file] [origin.rank]).squarepiece;
+
+	if piece = pawn & dest.rank = (1 | 8) then
+		case flags.promotion of {
+			"Q": newpiece := queen;
+			"R" : newpiece := rook;
+			"N" : newpiece := knight;
+			"B" : newpiece := bishop
+		}
+	else 
+		newpiece := piece;
+
+	removesquare (pieces [piece] [color], origin);
+	insert (pieces [newpiece] [color], dest);
+
+
+	if (board [dest.file] [dest.rank]).squarecolor = othercolor (color) then {
+		piece := (board [dest.file] [dest.rank]).squarepiece;
+		removesquare (pieces [piece, othercolor (color)], dest);
+		flags.draw := 0;
+	};
+
+	board [origin.file] [origin.rank] := squarecontent (empty, empty);
+	board [dest.file] [dest.rank] := squarecontent (color, newpiece);
+
+	if piece = king & abs (dest.file - origin.file) = 2 then
+		if dest.file = g then {
+			removesquare (pieces [rook] [color], position (h, color^3));
+			insert (pieces [rook] [color], position (f, color^3));
+			board [h] [color^3] := squarecontent (empty, empty);
+			board [f] [color^3] := squarecontent (color, rook);
+		} else {
+			removesquare (pieces [rook] [color], position (a, color^3));
+			insert (pieces [rook] [color], position (d, color^3));
+			board [a] [color^3] := squarecontent (empty, empty);
+			board [d] [color^3] := squarecontent (color, rook);
+		};
+
+	if flags.cancastle [color] > 0 then {
+		if piece = king then 
+			flags.cancastle [color] := 0
+		else if piece = rook then
+			if flags.cancastle [color] = (a | a+h) &  
+				samesquare (origin, position (a, color^3)) then
+					flags.cancastle [color] := flags.cancastle [color] - a
+			else if flags.cancastle [color] = (h | a+h) & 
+				samesquare (origin, position (h, color^3)) then
+					flags.cancastle [color] := flags.cancastle [color] - h;
+	};
+
+	if piece = pawn & samesquare (dest, flags.enpassant) then {
+		removesquare (pieces [pawn] [othercolor (color)], 
+			position (dest.file, othercolor (color)+3));
+		board [dest.file] [othercolor (color)+3] := squarecontent (empty, empty);
+	};
+
+	if piece = pawn & abs (dest.rank - origin.rank) = 2 then
+		flags.enpassant := position (dest.file, color*3)
+	else
+		flags.enpassant := position (empty, empty); 
+
+	if piece = pawn then flags.draw := 0 else flags.draw +:= 1;
+end
+
+
+procedure ischeck (board, pieces, flags, color, check);
+	local moves, kingpos;
+
+	if \check then {		kingpos := ? pieces [king] [color];
+		moves := set ();
+		generateall (board, pieces, flags, othercolor (color), moves, &null);
+		return (issquare (moves, kingpos));
+	} else fail;
+end
+
+
+procedure testmove (board, pieces, flags, color, origin, x, y, moves, check);
+	local boardcopy, piecescopy, flagscopy;
+
+	if (board [x] [y]).squarecolor = color then fail;
+
+	boardcopy := list (8);
+	every !boardcopy := list (8, squarecontent (0, 0));
+	piecescopy := list (6);
+	every !piecescopy := [set (), set ()];
+	flagscopy := flagrecord ();
+	copyboard (board, pieces, flags, boardcopy, piecescopy, flagscopy);
+
+	movepiece (boardcopy, piecescopy, flagscopy, color, origin, position (x, y));
+	if not (ischeck (boardcopy, piecescopy, flagscopy, color, check)) then 
+		insert (moves, position (x, y));
+
+	if (board [x] [y]).squarecolor = othercolor (color) then fail;
+	return;
+end
+
+
+procedure generateking (board, pieces, flags, color, origin, moves, check);
+	local x, y, cancastle;
+
+	every x := origin.file - 1 to origin.file + 1 & (a <= x <= h) &
+		every y := origin.rank - 1 to origin.rank + 1 & (1 <= y <= 8) do
+			testmove (board, pieces, flags, color, origin, x, y, moves, check);
+
+	cancastle := flags.cancastle [color];
+
+	if cancastle > 0 & not (ischeck (board, pieces, flags, color, check)) then {
+		if cancastle = (h | a+h) &
+			(board [f] [color^3]).squarecolor = empty &
+			(board [g] [color^3]).squarecolor = empty &
+			(board [h] [color^3]).squarecolor = color &
+			(board [h] [color^3]).squarepiece = rook then {
+				movepiece (board, pieces, flags, color, origin, position (f, color^3));
+				if not (ischeck (board, pieces, flags, color, check)) then
+					testmove (board, pieces, flags, color, position (f, color^3), g, color^3, moves, check);
+				movepiece (board, pieces, flags, color, position (f, color^3), origin);
+		} else if cancastle = (a | a+h) &
+			(board [d] [color^3]).squarecolor = empty &
+			(board [c] [color^3]).squarecolor = empty &
+			(board [b] [color^3]).squarecolor = empty &
+			(board [a] [color^3]).squarecolor = color &
+			(board [a] [color^3]).squarepiece = rook then {
+				movepiece (board, pieces, flags, color, origin, position (d, color^3));
+				if not (ischeck (board, pieces, flags, color, check)) then
+					testmove (board, pieces, flags, color, position (d, color^3), c, color^3, moves, check);
+				movepiece (board, pieces, flags, color, position (d, color^3), origin);
+		};
+	};		
+
+	flags.cancastle [color] := cancastle;
+
+end
+
+
+procedure generaterook (board, pieces, flags, color, origin, moves, check);
+	local x, y;
+
+	every x := origin.file + 1 to h do
+		if not (testmove (board, pieces, flags, color, origin, x, origin.rank, moves, check)) then break;
+
+	every x := origin.file - 1 to a by -1 do
+		if not (testmove (board, pieces, flags, color, origin, x, origin.rank, moves, check)) then break;
+
+	every y := origin.rank + 1 to 8 do
+		if not (testmove (board, pieces, flags, color, origin, origin.file, y, moves, check)) then break;
+
+	every y := origin.rank - 1 to 1 by -1 do
+		if not (testmove (board, pieces, flags, color, origin, origin.file, y, moves, check)) then break;
+end
+
+
+procedure generatebishop (board, pieces, flags, color, origin, moves, check);
+	local d;
+
+	every d := 1 to 7 & origin.file + d <= h & origin.rank + d <= 8 do 
+		if not (testmove (board, pieces, flags, color, origin, origin.file + d, origin.rank + d, moves, check)) then break;
+
+	every d := 1 to 7 & origin.file + d <= h & origin.rank - d >= 1 do 
+		if not (testmove (board, pieces, flags, color, origin, origin.file + d, origin.rank - d, moves, check)) then break;
+
+	every d := 1 to 7 & origin.file - d >= a & origin.rank + d <= 8 do 
+		if not (testmove (board, pieces, flags, color, origin, origin.file - d, origin.rank + d, moves, check)) then break;
+
+	every d := 1 to 7 & origin.file - d >= a & origin.rank - d >= 1 do 
+		if not (testmove (board, pieces, flags, color, origin, origin.file - d, origin.rank - d, moves, check)) then break;
+end
+
+
+procedure generatequeen (board, pieces, flags, color, origin, moves, check);
+	generaterook (board, pieces, flags, color, origin, moves, check);
+	generatebishop (board, pieces, flags, color, origin, moves, check);
+end
+
+
+procedure generateknight (board, pieces, flags, color, origin, moves, check);
+	local dx, dy;
+
+	every dx := (-2 | -1 | 1 | 2) & every dy := (-2 | -1 | 1 | 2) &
+		abs (dx) + abs (dy) = 3 & 
+			a <= origin.file + dx <= h & 1 <= origin.rank + dy <= 8 do
+				testmove (board, pieces, flags, color, origin, origin.file+dx, origin.rank+dy, moves, check);
+end
+
+
+procedure generatepawn (board, pieces, flags, color, origin, moves, check);
+	if color = white then {
+		if (board [origin.file] [origin.rank + 1]).squarecolor = empty & \check then {
+			testmove (board, pieces, flags, white, origin, origin.file, origin.rank + 1, moves, check);
+			if origin.rank = 2 & (board [origin.file] [4]).squarecolor = empty then
+				testmove (board, pieces, flags, white, origin, origin.file, 4, moves, check);
+		};
+		if origin.file >= b & 
+			((board [origin.file - 1] [origin.rank + 1]).squarecolor = black |
+			samesquare (flags.enpassant, position (origin.file - 1, origin.rank + 1))) then
+				testmove (board, pieces, flags, white, origin, origin.file - 1, origin.rank + 1, moves, check);
+		if origin.file <= h &
+			((board [origin.file + 1] [origin.rank + 1]).squarecolor = black |
+			samesquare (flags.enpassant, position (origin.file + 1, origin.rank + 1))) then
+				testmove (board, pieces, flags, white, origin, origin.file + 1, origin.rank + 1, moves, check);
+	} else {
+		if (board [origin.file] [origin.rank - 1]).squarecolor = empty & \check then {
+			testmove (board, pieces, flags, black, origin, origin.file, origin.rank - 1, moves, check);
+			if origin.rank = 7 & (board [origin.file] [5]).squarecolor = empty then 
+				testmove (board, pieces, flags, black, origin, origin.file, 5, moves, check);
+		};
+		if origin.file >= b & 
+			((board [origin.file - 1] [origin.rank - 1]).squarecolor = white |
+			samesquare (flags.enpassant, position (origin.file - 1, origin.rank - 1))) then
+				testmove (board, pieces, flags, black, origin, origin.file - 1, origin.rank - 1, moves, check);
+		if origin.file <= h &
+			((board [origin.file + 1] [origin.rank - 1]).squarecolor = white |
+			samesquare (flags.enpassant, position (origin.file + 1, origin.rank - 1))) then
+				testmove (board, pieces, flags, black, origin, origin.file + 1, origin.rank - 1, moves, check);
+	};
+end
+
+
+procedure generatemoves (board, pieces, flags, color, origin, moves, check);
+	case (board [origin.file] [origin.rank]).squarepiece of {
+		king : generateking (board, pieces, flags, color, origin, moves, check);
+		queen : generatequeen (board, pieces, flags, color, origin, moves, check);
+		rook : generaterook (board, pieces, flags, color, origin, moves, check);
+		knight : generateknight (board, pieces, flags, color, origin, moves, check);
+		bishop : generatebishop (board, pieces, flags, color, origin, moves, check);
+		pawn : generatepawn (board, pieces, flags, color, origin, moves, check)
+	};
+end
+
+
+procedure generateall (board, pieces, flags, color, moves, check);
+	local piece, square, piecemoves, squarelist;
+	
+	every piece := king to pawn do {
+		squarelist := sort (pieces [piece][color]);
+		every square := !squarelist do {
+			piecemoves := set ();
+			generatemoves (board, pieces, flags, color, square, piecemoves, check);
+			every insert (moves, copy (!piecemoves));
+		};
+	};
+end
+
+
+procedure nomoves (board, pieces, flags, color);
+	local moves;
+	
+	moves := set ();
+	generateall (board, pieces, flags, color, moves, king);
+	return (*moves = 0);
+end
+
+
+procedure ismate (board, pieces, flags, color);
+	return (ischeck (board, pieces, flags, color, king) & nomoves (board, pieces, flags, color));
+end
+
+
+procedure isdraw (flags);
+	return (flags.draw >= 100);
+end
+	
+
+procedure islegalmove (board, pieces, flags, color, origin, dest);
+	local move, moves;
+
+	if (board [origin.file] [origin.rank]).squarecolor ~= color | 
+	(board [dest.file] [dest.rank]).squarecolor = color then
+		fail
+	else {
+		moves := set ();
+		generatemoves (board, pieces, flags, color, origin, moves, king);
+		every move := !moves do
+			if samesquare (move, dest) then return;
+		fail;		
+	};
+end
+
+
+procedure isvalidentry (board, inputmove);
+	if not (4 <= *inputmove <= 5) then fail;
+
+	if not (ord ("a") <= ord (inputmove [1]) <= ord ("h")) then fail;
+
+	if not (ord ("1") <= ord (inputmove [2]) <= ord ("8")) then fail;
+
+	if not (ord ("a") <= ord (inputmove [3]) <= ord ("h")) then fail;
+
+	if not (ord ("1") <= ord (inputmove [4]) <= ord ("8")) then fail;
+
+	if *inputmove = 5 then {
+		if not (inputmove [5] == "Q" | "R" | "N" | "B") then fail;
+		if inputmove [4] ~== "8" then fail;
+	};
+
+	return;
+end
+
+
+procedure gethumanmove (board, pieces, flags, color);
+	local inputmove, origin, dest;
+
+	repeat {
+		writes (flags.counter, ". ");
+		if color = black then {
+			displaymove (flags.origin, flags.dest);
+			writes (" ");
+		};
+
+		inputmove := read ();
+
+		if inputmove == "draw" then break;
+
+		if not (isvalidentry (board, inputmove)) then {
+			write ("Invalid entry.");
+			next;
+		};
+
+		origin := position (ord (inputmove [1]) - ord ("a") + 1, 
+					numeric (inputmove [2]));
+		dest := position (ord (inputmove [3]) - ord ("a") + 1,
+					numeric (inputmove [4]));
+		if islegalmove (board, pieces, flags, color, origin, dest) then break;
+		write ("Illegal move.");
+	};
+
+	if *inputmove = 5 then flags.promotion := inputmove [5];
+
+	if inputmove == "draw" then 
+		flags.draw := 100
+	else {
+		movepiece (board, pieces, flags, color, origin, dest);
+		copysquare (origin, flags.origin);
+		copysquare (dest, flags.dest);
+	};
+end
+
+
+procedure traincomputer (games);
+local pieces, board, flags;
+local gamecounter, color;
+
+	gamecounter := 1;
+
+	until gamecounter > games do {
+		write ("Game: ", gamecounter);
+		write ();
+
+		pieces := list (6);
+		initializepieces (pieces);
+
+		board := list (8);
+		initializeboard (board, pieces);
+
+		flags := flagrecord ();
+		initializeflags (flags);
+
+		color := white;
+
+		until nomoves (board, pieces, flags, color) | isdraw (flags) do {
+			if color = white then {
+				writes (flags.counter, ". ");
+			} else
+				writes (" ");
+
+			getcomputermove (board, pieces, flags, color);
+			displaymove (flags.origin, flags.dest);
+
+			if color = black then {
+				flags.counter +:= 1;
+				write ();
+				displayboard (board);
+			};
+
+			color := othercolor (color);
+			flags.promotion := "Q";
+		};
+
+
+		if color = black then {
+			write ();
+			displayboard (board);
+		};
+		gamecounter +:= 1;
+	};
+end
+
+
+procedure playgame (firstplayer);
+local pieces, board, flags;
+local playercolor, player;
+
+	pieces := list (6);
+	initializepieces (pieces);
+	
+	board := list (8);
+	initializeboard (board, pieces);
+
+	flags := flagrecord ();
+	initializeflags (flags);
+
+	playercolor := list (2);
+
+	playercolor [firstplayer] := white;
+	playercolor [otherplayer (firstplayer)] := black;
+	player := firstplayer;
+
+	until nomoves (board, pieces, flags, playercolor [player]) | isdraw (flags) do {
+		displayboard (board);
+		if player = human then
+			gethumanmove (board, pieces, flags, playercolor [human])
+		else {
+			writes (flags.counter, ". ");
+			if playercolor [computer] = black then {
+				displaymove (flags.origin, flags.dest);
+				writes (" ");
+			};
+			getcomputermove (board, pieces, flags, playercolor [computer]);
+			displaymove (flags.origin, flags.dest);
+			write ();
+		};
+		if playercolor [player] = black then flags.counter +:= 1;
+		player := otherplayer (player);
+		flags.promotion := "Q";
+	};
+
+	displayboard (board);
+	if ismate (board, pieces, flags, playercolor [player]) then
+		case player of {
+			human : write ("You are checkmate.");	computer : write ("I am checkmate.")
+		}
+	else if isdraw (flags) then
+		write ("Draw.")
+	else
+		write ("Stalemate.");
+	write ();
+end
+
+
+procedure main (args);
+	initializeconstants ();
+
+	if *args = 0 then
+		playgame (human)
+	else if args [1] == "-b" then
+		playgame (computer)
+	else if args [1] == "-c" & \args [2] then
+		traincomputer (numeric (args [2]))
+	else 
+		write ("Invalid arguments.");
+end
+

@@ -12,7 +12,7 @@ record squarecontent (squarecolor, squarepiece)
 
 record flagrecord (cancastle, enpassant, draw, promotion, origin, dest, counter)
 
-link brainless
+link brain
 
 
 procedure initializeconstants ();

@@ -463,8 +463,7 @@ end
 
 
 procedure ismate (board, pieces, flags, color);
-	return (ischeck (board, pieces, flags, color, king) 
-		& nomoves (board, pieces, flags, color));
+	return (ischeck (board, pieces, flags, color, king) & nomoves (board, pieces, flags, color));
 end
 
 

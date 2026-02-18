@@ -1,1 +1,253 @@
-global brainprocedure initializebrain ();	brain := list (2);end	procedure chessfunction (board, pieces, flags, color, origin, dest);local piece, moves, fromsquare, tosquare;	moves := set ();	until *moves > 0 do {		piece := ? pieces;		fromsquare := ? piece [color];		if /fromsquare then next;		generatemoves (board, pieces, flags, color, fromsquare, moves, king);	};	tosquare := ? moves;	copysquare (fromsquare, origin);	copysquare (tosquare, dest);endprocedure getcomputermove (board, pieces, flags, color);	local piece, moves, origin, dest;	initial initializebrain ();	origin := position (empty, empty);	dest := position (empty, empty);	chessfunction (board, pieces, flags, color, origin, dest);	movepiece (board, pieces, flags, color, origin, dest);	copysquare (origin, flags.origin);	copysquare (dest, flags.dest);end
+global pst
+
+
+procedure initializebrain ();
+	initpst ();
+end
+
+
+procedure buildpst (data);
+	local result, fl, rk, index;
+
+	result := list (8);
+	every fl := 1 to 8 do
+		result [fl] := list (8, 0);
+	index := 1;
+	every rk := 8 to 1 by -1 do
+		every fl := 1 to 8 do {
+			result [fl] [rk] := data [index];
+			index +:= 1;
+		};
+	return result;
+end
+
+
+procedure initpst ();
+	pst := list (6);
+
+	pst [king] := buildpst ([
+		-30,-40,-40,-50,-50,-40,-40,-30,
+		-30,-40,-40,-50,-50,-40,-40,-30,
+		-30,-40,-40,-50,-50,-40,-40,-30,
+		-30,-40,-40,-50,-50,-40,-40,-30,
+		-20,-30,-30,-40,-40,-30,-30,-20,
+		-10,-20,-20,-20,-20,-20,-20,-10,
+		 20, 20,  0,  0,  0,  0, 20, 20,
+		 20, 30, 10,  0,  0, 10, 30, 20]);
+
+	pst [queen] := buildpst ([
+		-20,-10,-10, -5, -5,-10,-10,-20,
+		-10,  0,  0,  0,  0,  0,  0,-10,
+		-10,  0,  5,  5,  5,  5,  0,-10,
+		 -5,  0,  5,  5,  5,  5,  0, -5,
+		  0,  0,  5,  5,  5,  5,  0, -5,
+		-10,  5,  5,  5,  5,  5,  0,-10,
+		-10,  0,  5,  0,  0,  0,  0,-10,
+		-20,-10,-10, -5, -5,-10,-10,-20]);
+
+	pst [rook] := buildpst ([
+		  0,  0,  0,  0,  0,  0,  0,  0,
+		  5, 10, 10, 10, 10, 10, 10,  5,
+		 -5,  0,  0,  0,  0,  0,  0, -5,
+		 -5,  0,  0,  0,  0,  0,  0, -5,
+		 -5,  0,  0,  0,  0,  0,  0, -5,
+		 -5,  0,  0,  0,  0,  0,  0, -5,
+		 -5,  0,  0,  0,  0,  0,  0, -5,
+		  0,  0,  0,  5,  5,  0,  0,  0]);
+
+	pst [knight] := buildpst ([
+		-50,-40,-30,-30,-30,-30,-40,-50,
+		-40,-20,  0,  0,  0,  0,-20,-40,
+		-30,  0, 10, 15, 15, 10,  0,-30,
+		-30,  5, 15, 20, 20, 15,  5,-30,
+		-30,  0, 15, 20, 20, 15,  0,-30,
+		-30,  5, 10, 15, 15, 10,  5,-30,
+		-40,-20,  0,  5,  5,  0,-20,-40,
+		-50,-40,-30,-30,-30,-30,-40,-50]);
+
+	pst [bishop] := buildpst ([
+		-20,-10,-10,-10,-10,-10,-10,-20,
+		-10,  0,  0,  0,  0,  0,  0,-10,
+		-10,  0,  5, 10, 10,  5,  0,-10,
+		-10,  5,  5, 10, 10,  5,  5,-10,
+		-10,  0, 10, 10, 10, 10,  0,-10,
+		-10, 10, 10, 10, 10, 10, 10,-10,
+		-10,  5,  0,  0,  0,  0,  5,-10,
+		-20,-10,-10,-10,-10,-10,-10,-20]);
+
+	pst [pawn] := buildpst ([
+		  0,  0,  0,  0,  0,  0,  0,  0,
+		 50, 50, 50, 50, 50, 50, 50, 50,
+		 10, 10, 20, 30, 30, 20, 10, 10,
+		  5,  5, 10, 25, 25, 10,  5,  5,
+		  0,  0,  0, 20, 20,  0,  0,  0,
+		  5, -5,-10,  0,  0,-10, -5,  5,
+		  5, 10, 10,-20,-20, 10, 10,  5,
+		  0,  0,  0,  0,  0,  0,  0,  0]);
+end
+
+
+procedure materialvalue (piece);
+	case piece of {
+		king : return 20000;
+		queen : return 900;
+		rook : return 500;
+		knight : return 320;
+		bishop : return 330;
+		pawn : return 100
+	};
+end
+
+
+procedure pstvalue (piece, fl, rk, color);
+	if color = white then
+		return pst [piece] [fl] [rk]
+	else
+		return pst [piece] [fl] [9 - rk];
+end
+
+
+procedure evaluate (board, pieces, flags, color);
+	local score, c, p, sq, sign;
+
+	score := 0;
+	every c := white to black do {
+		if c = color then sign := 1 else sign := -1;
+		every p := king to pawn do
+			every sq := !pieces [p] [c] do
+				score +:= sign * (materialvalue (p) +
+					pstvalue (p, sq.file, sq.rank, c));
+	};
+	return score;
+end
+
+
+procedure generatemovelist (board, pieces, flags, color);
+	local movelist, p, sq, moves, dest, squarelist;
+
+	movelist := [];
+	every p := king to pawn do {
+		squarelist := sort (pieces [p] [color]);
+		every sq := !squarelist do {
+			moves := set ();
+			generatemoves (board, pieces, flags, color, sq, moves, king);
+			every dest := !moves do
+				put (movelist, [position (sq.file, sq.rank),
+					position (dest.file, dest.rank)]);
+		};
+	};
+	return movelist;
+end
+
+
+procedure ordermoves (board, movelist);
+	local scored, move, origin, dest, score, victim, attacker;
+
+	scored := [];
+	every move := !movelist do {
+		origin := move [1];
+		dest := move [2];
+		score := 0;
+		if (board [dest.file] [dest.rank]).squarecolor ~= empty then {
+			victim := (board [dest.file] [dest.rank]).squarepiece;
+			attacker := (board [origin.file] [origin.rank]).squarepiece;
+			score := materialvalue (victim) * 10 - materialvalue (attacker);
+		};
+		if (board [origin.file] [origin.rank]).squarepiece = pawn &
+			dest.rank = (1 | 8) then
+			score +:= 9000;
+		put (scored, [-score, origin, dest]);
+	};
+	scored := sortf (scored, 1);
+	movelist := [];
+	every move := !scored do
+		put (movelist, [move [2], move [3]]);
+	return movelist;
+end
+
+
+procedure allocboard ();
+	local boardcopy, piecescopy, flagscopy;
+
+	boardcopy := list (8);
+	every !boardcopy := list (8, squarecontent (0, 0));
+	piecescopy := list (6);
+	every !piecescopy := [set (), set ()];
+	flagscopy := flagrecord ();
+	return [boardcopy, piecescopy, flagscopy];
+end
+
+
+procedure negamax (board, pieces, flags, color, depth, alpha, beta);
+	local movelist, best, move, origin, dest, state, score;
+
+	if depth = 0 then
+		return evaluate (board, pieces, flags, color);
+
+	movelist := generatemovelist (board, pieces, flags, color);
+	movelist := ordermoves (board, movelist);
+
+	if *movelist = 0 then {
+		if ischeck (board, pieces, flags, color, king) then
+			return -(99999 + depth)
+		else
+			return 0;
+	};
+
+	best := -100000;
+	every move := !movelist do {
+		origin := move [1];
+		dest := move [2];
+		state := allocboard ();
+		copyboard (board, pieces, flags, state [1], state [2], state [3]);
+		movepiece (state [1], state [2], state [3], color,
+			position (origin.file, origin.rank),
+			position (dest.file, dest.rank));
+		score := -negamax (state [1], state [2], state [3],
+			othercolor (color), depth - 1, -beta, -alpha);
+		if score > best then best := score;
+		if score > alpha then alpha := score;
+		if alpha >= beta then return best;
+	};
+	return best;
+end
+
+
+procedure getcomputermove (board, pieces, flags, color);
+	local movelist, best, bestmove, move, origin, dest, state, score;
+
+	initial initializebrain ();
+
+	movelist := generatemovelist (board, pieces, flags, color);
+	movelist := ordermoves (board, movelist);
+
+	best := -100000;
+	bestmove := movelist [1];
+
+	every move := !movelist do {
+		origin := move [1];
+		dest := move [2];
+		state := allocboard ();
+		copyboard (board, pieces, flags, state [1], state [2], state [3]);
+		movepiece (state [1], state [2], state [3], color,
+			position (origin.file, origin.rank),
+			position (dest.file, dest.rank));
+		score := -negamax (state [1], state [2], state [3],
+			othercolor (color), 3, -100000, 100000);
+		if score > best then {
+			best := score;
+			bestmove := move;
+		};
+	};
+
+	origin := bestmove [1];
+	dest := bestmove [2];
+
+	if (board [origin.file] [origin.rank]).squarepiece = pawn &
+		dest.rank = (1 | 8) then
+		flags.promotion := "Q";
+
+	movepiece (board, pieces, flags, color, origin, dest);
+	copysquare (origin, flags.origin);
+	copysquare (dest, flags.dest);
+end

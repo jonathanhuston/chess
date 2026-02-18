@@ -33,7 +33,7 @@ Human moves are entered as coordinate pairs (e.g., `e2e4`). Pawn promotion appen
 - Move generation per piece type (`generateking`, `generaterook`, etc.) with legality checking via `testmove` which copies the board, applies the move, and verifies king safety
 - The `check` parameter controls whether move generation validates for check (pass `king` for legal moves, `&null` for attack squares only)
 
-**brain.icn** — AI module with a `getcomputermove` procedure and `initializebrain`/`chessfunction` helpers. Currently picks a random piece that has legal moves and plays a random legal move.
+**brain.icn** — AI module using negamax search with alpha-beta pruning at depth 4. Evaluation combines material values (standard centipawn: P=100, N=320, B=330, R=500, Q=900, K=20000) with Michniewski-style piece-square tables for positional knowledge. Move ordering uses MVV-LVA for captures and promotion bonuses. Key procedures: `getcomputermove` (root search), `negamax` (recursive search), `evaluate` (material + PST), `generatemovelist`, `ordermoves`, `allocboard`.
 
 **brainless.icn** — Minimal AI module: same random move strategy as brain.icn but without the brain/learning scaffolding.
 
@@ -47,3 +47,11 @@ Human moves are entered as coordinate pairs (e.g., `e2e4`). Pawn promotion appen
 - Back rank computed as `color^3` (white=1, black=8).
 - Draw detected at 100 half-moves (50-move rule).
 - All source files use tabs for indentation and Icon's semicolon-terminated style.
+
+## Future Enhancements for brain.icn
+
+- **Iterative deepening** — search depth 1, 2, 3, 4 progressively; enables time control and better move ordering
+- **Quiescence search** — extend captures past the horizon to avoid tactical blindness
+- **Transposition table** — cache evaluated positions to avoid redundant work
+- **Opening book** — avoid symmetric shuffling in self-play and play known good openings
+- **Endgame king PST** — switch king tables when material is low (centralize the king)
